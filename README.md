@@ -2,6 +2,28 @@
 
 独立的微信服务端 API 应用。统一管理多公众号 / 小程序的 `access_token`，处理微信服务器消息推送，并为业务方提供 HTTP 接口。
 
+## 文档导航
+
+| 文档 | 内容 | 什么时候看 |
+|---|---|---|
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | **部署与上线实战**：从空白服务器到微信后台配置完成的 10 个步骤 | 第一次部署时**按顺序照做** |
+| [docs/API.md](docs/API.md) | **接口参考**：所有对外接口的参数、响应、错误码 | 写代码调用时查 |
+| [examples/client.js](examples/client.js) | **可运行示例**：8 个命令覆盖全部主要接口 | 想快速验证接口 |
+| 本文件 | 架构设计、目录结构、核心机制说明 | 理解项目原理 |
+
+### 快速验证（无需 MySQL）
+
+```bash
+# 终端 1：启动演示服务（内存库）
+node examples/demo-server.js
+
+# 终端 2：完整巡检
+BASE_URL=http://127.0.0.1:3000 node examples/client.js all
+```
+
+> 💡 若报 `fetch failed`，是开发机的 `HTTP_PROXY` 把本地请求也转发给代理了，清掉即可：
+> `env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy BASE_URL=... node examples/client.js all`
+
 ## 技术栈
 
 | 层 | 选型 | 说明 |
@@ -40,7 +62,13 @@ src/
     ├── http.js             # 请求封装（超时、errcode 判定）
     └── logger.js
 migrations/                 # 数据库迁移
-scripts/                    # 工具脚本
+scripts/                    # 工具脚本（密钥生成、自测）
+docs/
+├── DEPLOYMENT.md           # 部署与上线实战指南
+└── API.md                  # 接口参考文档
+examples/
+├── client.js               # 可运行的调用示例（8 个命令）
+└── demo-server.js          # 本地演示服务（内存库，无需 MySQL）
 ```
 
 ## 快速开始
