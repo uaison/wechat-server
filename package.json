@@ -1,0 +1,43 @@
+{
+  "name": "wechat-server",
+  "version": "1.0.0",
+  "description": "独立的微信服务端 API 应用，统一管理多公众号/小程序的 access_token，处理微信服务器消息推送与 API 调用",
+  "type": "module",
+  "main": "src/app.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "node --watch src/app.js",
+    "migrate": "knex --knexfile knexfile.js migrate:latest",
+    "migrate:rollback": "knex --knexfile knexfile.js migrate:rollback",
+    "migrate:make": "knex --knexfile knexfile.js migrate:make",
+    "keygen": "node scripts/gen-key.js",
+    "test:self": "node scripts/selftest.js",
+    "test:smoke": "node scripts/smoke-route.js",
+    "test:integration": "node scripts/integration-test.js",
+    "test": "npm run test:self && npm run test:integration"
+  },
+  "keywords": [
+    "wechat",
+    "weixin",
+    "koa",
+    "access_token"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@koa/router": "^13.1.0",
+    "dotenv": "^16.4.5",
+    "knex": "^3.1.0",
+    "koa": "^2.15.3",
+    "mysql2": "^3.11.3",
+    "node-cron": "^3.0.3",
+    "pino": "^9.5.0",
+    "pino-pretty": "^11.3.0",
+    "xml2js": "^0.6.2"
+  },
+  "devDependencies": {
+    "better-sqlite3": "^13.0.3"
+  }
+}

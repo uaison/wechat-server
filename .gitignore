@@ -1,0 +1,16 @@
+# ---- 依赖与产物 ----
+node_modules/
+logs/
+*.log
+npm-debug.log*
+
+# ---- 环境变量(含密钥,绝不提交) ----
+.env
+.env.local
+.env.*.local
+
+# ---- IDE / 系统 ----
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
