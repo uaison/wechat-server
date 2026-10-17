@@ -9,7 +9,8 @@
  */
 export function rawBody() {
   return async (ctx, next) => {
-    if (ctx.method === 'POST' || ctx.method === 'PUT') {
+    // 覆盖所有带请求体的方法(PATCH 也不能漏,否则 JSON body 会读不到)
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(ctx.method)) {
       ctx.request.rawBody = await readStream(ctx.req);
     }
     await next();

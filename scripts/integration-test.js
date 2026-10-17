@@ -239,11 +239,33 @@ console.log('\n[8] XML 解析与回复构造');
   assert('回复 XML 含 CreateTime', /<CreateTime>\d+<\/CreateTime>/.test(reply));
 }
 
-console.log('\n[9] API 路由响应(装配层)');
+console.log('\n[9] API 路由响应(装配层,含鉴权)');
 {
+  // 本文件顶部已设置 DB_CLIENT=sqlite? 若无则补上 —— 必须在动态 import 前生效。
+  // 此处动态 import 都在 env 设置之后执行,安全。
+  process.env.DB_CLIENT = process.env.DB_CLIENT || 'sqlite';
+  process.env.DB_FILE = process.env.DB_FILE || ':memory:';
+
   const { rawBody } = await import('../src/middleware/raw-body.js');
   const { errorHandler } = await import('../src/middleware/error.js');
   const { apiRouter } = await import('../src/routes/api.js');
+  const { knex: appKnex } = await import('../src/db/knex.js');
+  const clientModel = await import('../src/models/api-client.model.js');
+
+  // 为鉴权准备 api_clients 表与测试密钥
+  await appKnex.schema.createTable('api_clients', (t) => {
+    t.increments('id').primary();
+    t.string('name', 64).notNullable();
+    t.string('key_hash', 64).notNullable();
+    t.string('key_prefix', 12).notNullable();
+    t.text('allowed_appids').notNullable().defaultTo('[]');
+    t.boolean('enabled').notNullable().defaultTo(true);
+    t.string('remark', 255).nullable();
+    t.timestamp('created_at').notNullable().defaultTo(appKnex.fn.now());
+    t.timestamp('updated_at').notNullable().defaultTo(appKnex.fn.now());
+  });
+  const { key } = await clientModel.create({ name: 'integration-suite', allowedAppids: ['*'] });
+  const keyHeader = { 'X-API-Key': key, 'Content-Type': 'application/json' };
 
   const app = new Koa();
   app.use(errorHandler());
@@ -260,10 +282,14 @@ console.log('\n[9] API 路由响应(装配层)');
   assert('健康检查返回 status=ok', body.status === 'ok');
   assert('健康检查含 uptime', typeof body.uptime === 'number');
 
+  // 未带密钥访问业务接口 → 401(鉴权生效)
+  const noAuth = await fetch(`http://127.0.0.1:${port}/api/accounts`);
+  assert('未带密钥访问业务接口 → 401', noAuth.status === 401);
+
   // 缺少必填参数应返回 400
   const res2 = await fetch(`http://127.0.0.1:${port}/api/accounts`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: keyHeader,
     body: JSON.stringify({ appid: 'only_appid' }),
   });
   const body2 = await res2.json();
@@ -271,6 +297,7 @@ console.log('\n[9] API 路由响应(装配层)');
   assert('错误响应含提示信息', body2.message.includes('appSecret'));
 
   await new Promise((r) => server.close(r));
+  await appKnex.destroy();
 }
 
 await testKnex.destroy();

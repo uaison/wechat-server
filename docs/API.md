@@ -12,6 +12,30 @@ export BASE=https://wechat.yourdomain.com
 
 ## 通用约定
 
+### 鉴权(重要)
+
+`/api/*` 下除 `/api/health` 外**全部需要 API 密钥**。密钥由管理员通过 `/api/clients` 签发给每个项目,**明文只在签发时返回一次**。
+
+```
+# 两种携带方式任选
+X-API-Key: wsk_xxxxxxxx...
+Authorization: Bearer wsk_xxxxxxxx...
+```
+
+**两级密钥体系**:
+
+| 密钥 | 头部 | 能做什么 | 给谁 |
+|---|---|---|---|
+| 业务密钥 `wsk_...` | `X-API-Key` | 调业务接口,**只能访问授权的 appid** | 各项目后端 |
+| 管理员密钥 | `X-Admin-Key` | 签发/吊销/轮换业务密钥 | 只有运维持有 |
+
+**鉴权错误**:
+
+| HTTP | 含义 |
+|---|---|
+| `401` | 缺少密钥 / 密钥无效 / 已被吊销 |
+| `403` | 密钥有效,但无权访问目标 appid(隔离生效) |
+
 ### 响应格式
 
 **成功**：
@@ -58,6 +82,7 @@ export BASE=https://wechat.yourdomain.com
 ## 目录
 
 - [健康检查](#健康检查)
+- [密钥管理(管理员)](#密钥管理管理员)
 - [账号管理](#账号管理)
 - [access_token 管理](#access_token-管理)
 - [业务接口](#业务接口)
@@ -65,6 +90,85 @@ export BASE=https://wechat.yourdomain.com
 - [调用代码示例](#调用代码示例)
 
 ---
+
+## 密钥管理(管理员)
+
+> 以下接口全部需要 `X-Admin-Key` 头。用于给各接入项目签发/吊销密钥。
+
+### GET /api/clients —— 列出全部项目密钥
+
+```bash
+curl $BASE/api/clients -H 'X-Admin-Key: <管理员密钥>'
+```
+
+```json
+{
+  "code": 0,
+  "data": [
+    {
+      "name": "项目A",
+      "keyPrefix": "wsk_1a2b3c4d",
+      "allowedAppids": ["wxAAA1", "wxAAA2"],
+      "enabled": true,
+      "remark": null,
+      "createdAt": "2026-10-17 12:00:00"
+    }
+  ]
+}
+```
+
+> `keyPrefix` 只是密钥前 12 位,用于识别"这是哪把钥匙"——完整明文库中不存在。
+
+### POST /api/clients —— 签发新密钥
+
+```bash
+curl -X POST $BASE/api/clients \
+  -H 'X-Admin-Key: <管理员密钥>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "项目A",
+    "allowedAppids": ["wxAAA1", "wxAAA2"],
+    "remark": "项目A 后端专用"
+  }'
+```
+
+```json
+{
+  "code": 0,
+  "message": "创建成功。请立即保存密钥,它不会再次显示",
+  "data": {
+    "client": { "name": "项目A", "keyPrefix": "wsk_1a2b3c4d", "allowedAppids": ["wxAAA1", "wxAAA2"] },
+    "key": "wsk_64位十六进制..."
+  }
+}
+```
+
+> ⚠️ **`key` 明文仅此一次**。丢失只能 rotate 重发。库中只存 SHA-256 哈希。
+
+### PATCH /api/clients/:name —— 更新授权范围
+
+```bash
+curl -X PATCH $BASE/api/clients/项目A \
+  -H 'X-Admin-Key: <管理员密钥>' \
+  -H 'Content-Type: application/json' \
+  -d '{ "allowedAppids": ["wxAAA1", "wxAAA3"] }'
+```
+
+### POST /api/clients/:name/disable —— 吊销(立即生效)
+
+```bash
+curl -X POST $BASE/api/clients/项目A/disable -H 'X-Admin-Key: <管理员密钥>'
+```
+
+吊销后该项目的下一次请求立即 401,**不影响其他项目**。
+
+### POST /api/clients/:name/rotate —— 轮换密钥(应急)
+
+```bash
+curl -X POST $BASE/api/clients/项目A/rotate -H 'X-Admin-Key: <管理员密钥>'
+```
+
+返回新明文密钥,**旧密钥立即失效**。密钥泄露时的应急动作。
 
 ## 健康检查
 
@@ -494,13 +598,18 @@ register('image', async (msg, ctx) => {
 
 ```js
 const BASE = 'https://wechat.yourdomain.com';
+const API_KEY = process.env.WECHAT_SERVER_KEY; // 各项目保存自己的 wsk_ 密钥
 
 /**
  * 统一请求封装
  */
 async function api(path, options = {}) {
   const res = await fetch(BASE + path, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-API-Key': API_KEY,          // ★ 每个请求都带项目密钥
+      ...options.headers,
+    },
     ...options,
   });
   const data = await res.json();
@@ -629,19 +738,24 @@ chmod +x check-wechat.sh
 ```bash
 export BASE=https://wechat.yourdomain.com
 export APPID=wx1234567890abcdef
+export API_KEY=wsk_xxxx        # 项目密钥
+export ADMIN_KEY=xxxx          # 管理员密钥(仅运维持有)
 
-# 1. 服务是否活着
+# 1. 服务是否活着(无需密钥)
 curl -s $BASE/api/health | jq .
 
-# 2. 账号配置是否正确（重点看 hasToken / hasAesKey）
-curl -s $BASE/api/accounts | jq .
+# 2. 账号配置是否正确(重点看 hasToken / hasAesKey)
+curl -s $BASE/api/accounts -H "X-API-Key: $API_KEY" | jq .
 
-# 3. AppSecret 是否有效（最关键的一步验证）
-curl -s -X POST $BASE/api/token/$APPID/refresh | jq .
+# 3. AppSecret 是否有效(最关键的一步验证)
+curl -s -X POST $BASE/api/token/$APPID/refresh -H "X-API-Key: $API_KEY" | jq .
 
 # 4. token 状态
-curl -s $BASE/api/token/$APPID/status | jq .
+curl -s $BASE/api/token/$APPID/status -H "X-API-Key: $API_KEY" | jq .
 
 # 5. 批量预热
-curl -s -X POST $BASE/api/token/warmup | jq .
+curl -s -X POST $BASE/api/token/warmup -H "X-API-Key: $API_KEY" | jq .
+
+# 6. 密钥列表(管理员)
+curl -s $BASE/api/clients -H "X-Admin-Key: $ADMIN_KEY" | jq .
 ```

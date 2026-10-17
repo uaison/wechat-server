@@ -52,6 +52,10 @@ export const config = {
   // 敏感字段加密密钥,延迟校验(见 crypto.js)
   encryptKey: process.env.ENCRYPT_KEY || '',
 
+  // 管理员密钥(保护 /api/clients 密钥管理接口)
+  // 未配置时管理接口返回 503,避免裸奔上线
+  adminKey: process.env.ADMIN_KEY || '',
+
   wechat: {
     requestTimeout: envInt('WECHAT_REQUEST_TIMEOUT', 10000),
     // 提前刷新的安全边际:剩余有效期低于此值就刷新,避免"传输途中失效"

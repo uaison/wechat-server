@@ -174,10 +174,15 @@ DB_POOL_MAX=10
 # ===== 加密密钥（第3.1步生成的）=====
 ENCRYPT_KEY=c182ee397133b9ff0f5b48fbcaedd8df038146e84ad260b72dca1933839fb497
 
+# ===== 管理员密钥（保护密钥管理接口,只给运维,不给项目方）=====
+ADMIN_KEY=再生成一个,与ENCRYPT_KEY不同
+
 # ===== 微信接口 =====
 WECHAT_REQUEST_TIMEOUT=10000
 TOKEN_REFRESH_MARGIN_MS=300000
 ```
+
+> 💡 `ADMIN_KEY` 可再跑一次 `npm run keygen`,复制输出 `=` 后面的部分。
 
 ### 3.3 收紧文件权限
 
@@ -386,6 +391,21 @@ curl https://wechat.yourdomain.com/api/health
 
 ## 第 8 步：录入微信账号配置
 
+> 前置动作:各项目调用 `/api/*` 需要业务密钥。首次部署先签发一个:
+
+```bash
+# 用 ADMIN_KEY 为你的管理工具/第一个项目签发密钥(明文只显示一次!)
+curl -X POST https://wechat.yourdomain.com/api/clients \
+  -H 'X-Admin-Key: 你的ADMIN_KEY' \
+  -H 'Content-Type: application/json' \
+  -d '{"name": "管理工具", "allowedAppids": ["*"]}'
+# 返回的 key 即业务密钥,后续调用带上: -H 'X-API-Key: wsk_...'
+
+# 若以后有多个项目接入,为每个项目单独签发并限定其 appid:
+# curl -X POST .../api/clients -d '{"name": "项目A", "allowedAppids": ["wxAAA1"]}'
+# 项目A 泄露/下线时吊销,不影响其他项目
+```
+
 现在服务已经能通过公网访问了。接下来把你的公众号/小程序配置写进数据库。
 
 ### 8.1 从微信后台获取四项信息
@@ -400,7 +420,8 @@ curl https://wechat.yourdomain.com/api/health
 ### 8.2 调用接口录入
 
 ```bash
-curl -X POST https://wechat.yourdomain.com/api/accounts \
+curl -X POST https://wechat.yourdomain.com/api/accounts  \
+  -H 'X-API-Key: wsk_你的业务密钥'\
   -H 'Content-Type: application/json' \
   -d '{
     "appid": "wx1234567890abcdef",
@@ -423,7 +444,8 @@ curl -X POST https://wechat.yourdomain.com/api/accounts \
 
 ```bash
 # 查看账号列表（敏感字段已脱敏）
-curl https://wechat.yourdomain.com/api/accounts
+curl https://wechat.yourdomain.com/api/accounts \
+  -H 'X-API-Key: wsk_你的业务密钥'
 ```
 
 ```json
@@ -457,7 +479,8 @@ mysql -u wechat -p -h 127.0.0.1 -D wechat_server \
 这一步很关键——趁早发现填错。
 
 ```bash
-curl -X POST https://wechat.yourdomain.com/api/token/wx1234567890abcdef/refresh
+curl -X POST https://wechat.yourdomain.com/api/token/wx1234567890abcdef/refresh \
+  -H 'X-API-Key: wsk_你的业务密钥'
 ```
 
 **成功**：
@@ -524,7 +547,8 @@ INFO: 回调 URL 校验通过
 先拿一个测试用户的 openid（可以在后台用户管理里看到，或让用户先关注后用 `/api/user` 接口查）。
 
 ```bash
-curl -X POST https://wechat.yourdomain.com/api/message/custom/send \
+curl -X POST https://wechat.yourdomain.com/api/message/custom/send  \
+  -H 'X-API-Key: wsk_你的业务密钥'\
   -H 'Content-Type: application/json' \
   -d '{
     "appid": "wx1234567890abcdef",
@@ -564,7 +588,8 @@ DEBUG: 收到未处理消息
 ### 10.3 检查 token 状态
 
 ```bash
-curl https://wechat.yourdomain.com/api/token/wx1234567890abcdef/status
+curl https://wechat.yourdomain.com/api/token/wx1234567890abcdef/status \
+  -H 'X-API-Key: wsk_你的业务密钥'
 ```
 
 ```json
@@ -607,7 +632,8 @@ pm2 delete wechat-server
 只需调一次接口，**不用改代码、不用重启**：
 
 ```bash
-curl -X POST https://wechat.yourdomain.com/api/accounts \
+curl -X POST https://wechat.yourdomain.com/api/accounts  \
+  -H 'X-API-Key: wsk_你的业务密钥'\
   -H 'Content-Type: application/json' \
   -d '{
     "appid": "wx新号的appid",
@@ -624,7 +650,8 @@ curl -X POST https://wechat.yourdomain.com/api/accounts \
 新号会在下一次定时巡检（最多 10 分钟）时自动预热 token，也可立刻手动触发：
 
 ```bash
-curl -X POST https://wechat.yourdomain.com/api/token/warmup
+curl -X POST https://wechat.yourdomain.com/api/token/warmup \
+  -H 'X-API-Key: wsk_你的业务密钥'
 ```
 
 ### 备份
@@ -673,7 +700,8 @@ pm2 restart wechat-server
 回调 URL 里的 appid 与数据库里的对不上。核对：
 
 ```bash
-curl https://wechat.yourdomain.com/api/accounts | grep appid
+curl https://wechat.yourdomain.com/api/accounts | grep appid \
+  -H 'X-API-Key: wsk_你的业务密钥'
 ```
 
 ### 日志报"签名不通过"
@@ -740,7 +768,8 @@ mysql -u wechat -p -D wechat_server \
 
 ```bash
 # 强制刷新
-curl -X POST https://wechat.yourdomain.com/api/token/wxXXX/refresh -d '{"force": true}'
+curl -X POST https://wechat.yourdomain.com/api/token/wxXXX/refresh -d '{"force": true}' \
+  -H 'X-API-Key: wsk_你的业务密钥'
 ```
 
 彻底清空（下次调用会重新拉取）：

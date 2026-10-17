@@ -24,6 +24,21 @@ BASE_URL=http://127.0.0.1:3000 node examples/client.js all
 > 💡 若报 `fetch failed`，是开发机的 `HTTP_PROXY` 把本地请求也转发给代理了，清掉即可：
 > `env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy BASE_URL=... node examples/client.js all`
 
+### 多项目密钥（两分钟理解）
+
+每个接入项目获得独立密钥（`wsk_` 开头），只能访问授权的 appid，可单独吊销：
+
+```bash
+# 运维:用 ADMIN_KEY 给项目A 签发密钥(明文只显示一次)
+ADMIN_KEY=xxx npm run api -- create-client 项目A wxAAA1,wxAAA2
+
+# 项目A:拿密钥调业务接口
+API_KEY=wsk_xxx npm run api -- check-token
+```
+
+业务密钥存库只存 SHA-256 哈希；`/api/clients` 管理接口由 `ADMIN_KEY` 保护。
+详见 [docs/API.md](docs/API.md) 的「密钥管理」章节。
+
 ## 技术栈
 
 | 层 | 选型 | 说明 |

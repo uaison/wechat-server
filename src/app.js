@@ -17,6 +17,7 @@ import { rawBody } from './middleware/raw-body.js';
 import { errorHandler } from './middleware/error.js';
 import { callbackRouter } from './routes/callback.js';
 import { apiRouter } from './routes/api.js';
+import { clientsRouter } from './routes/clients.js';
 import { startScheduler } from './scheduler/index.js';
 import * as tokenService from './services/token.service.js';
 
@@ -44,6 +45,7 @@ app.use(async (ctx, next) => {
 // 路由
 app.use(callbackRouter.routes()).use(callbackRouter.allowedMethods());
 app.use(apiRouter.routes()).use(apiRouter.allowedMethods());
+app.use(clientsRouter.routes()).use(clientsRouter.allowedMethods());
 
 // 兜底 404
 app.use((ctx) => {

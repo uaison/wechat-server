@@ -25,8 +25,10 @@ const APPID = process.env.APPID || 'wx1234567890abcdef';
  *
  * 设计原则:调用者只关心"要什么",不关心 token、重试、错误解析。
  *
- * 注意:/api/health 是基础设施接口,返回的是裸对象(无 code 包装),
- *      其余业务接口统一返回 { code, data, message }。
+ * 鉴权(自动附加,按环境变量):
+ *   API_KEY    → X-API-Key 头,访问业务接口(/api/accounts 等)
+ *   ADMIN_KEY  → X-Admin-Key 头,访问密钥管理接口(/api/clients)
+ *   两者职责不同:ADMIN_KEY 只管签发/吊销密钥,不能调业务接口。
  *
  * ⚠️ 如果运行时报 "fetch failed",多半是开发机配置了 HTTP_PROXY 环境变量,
  *    Node 的 fetch 会把请求也发给代理。本地调试时清掉代理即可:
@@ -35,9 +37,13 @@ const APPID = process.env.APPID || 'wx1234567890abcdef';
  */
 async function api(path, options = {}) {
   const url = `${BASE}${path}`;
+  const headers = { 'Content-Type': 'application/json' };
+  if (process.env.API_KEY) headers['X-API-Key'] = process.env.API_KEY;
+  if (process.env.ADMIN_KEY) headers['X-Admin-Key'] = process.env.ADMIN_KEY;
+
   const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json' },
     ...options,
+    headers: { ...headers, ...(options.headers || {}) },
   });
 
   let data;
@@ -199,6 +205,66 @@ async function user(openid) {
 }
 
 // ============================================================
+// 密钥管理(需要 ADMIN_KEY 环境变量)
+// ============================================================
+
+/** 列出所有调用方密钥 */
+async function clients() {
+  const data = await api('/api/clients');
+  show(`API 密钥列表 (共 ${data.length} 个项目)`, data.map((c) => ({
+    name: c.name,
+    keyPrefix: c.keyPrefix,
+    allowedAppids: c.allowedAppids,
+    enabled: c.enabled,
+    remark: c.remark,
+  })));
+  return data;
+}
+
+/** 为新项目签发密钥 */
+async function createClient(name, appids) {
+  if (!name) throw new Error('用法: node examples/client.js create-client <项目名> [appid1,appid2,...]');
+
+  const allowedAppids = appids
+    ? appids.split(',').map((s) => s.trim()).filter(Boolean)
+    : [];
+
+  const data = await api('/api/clients', {
+    method: 'POST',
+    body: JSON.stringify({ name, allowedAppids }),
+  });
+
+  console.log(`\n════════════════════════════════════════`);
+  console.log(`  项目 ${name} 的密钥已签发`);
+  console.log(`  密钥: ${data.key}`);
+  console.log(`  授权: ${allowedAppids.length ? allowedAppids.join(', ') : '(空,需 PATCH 补充)'}`);
+  console.log(`════════════════════════════════════════`);
+  console.log(`⚠️  此密钥仅显示这一次,请立即交给项目方保存!`);
+  console.log(`项目方调用方式: 请求头 X-API-Key: <密钥>`);
+  return data;
+}
+
+/** 吊销某项目的密钥 */
+async function disableClient(name) {
+  if (!name) throw new Error('用法: node examples/client.js disable-client <项目名>');
+  const data = await api(`/api/clients/${encodeURIComponent(name)}/disable`, { method: 'POST' });
+  show(`项目 ${name} 已吊销`, data);
+  console.log('该项目的下一次请求将立即返回 401');
+  return data;
+}
+
+/** 轮换某项目的密钥(应急:泄露后使用) */
+async function rotateClient(name) {
+  if (!name) throw new Error('用法: node examples/client.js rotate-client <项目名>');
+  const data = await api(`/api/clients/${encodeURIComponent(name)}/rotate`, { method: 'POST' });
+  console.log(`\n════════════════════════════════════════`);
+  console.log(`  项目 ${name} 的新密钥: ${data.key}`);
+  console.log(`  旧密钥已立即失效`);
+  console.log(`════════════════════════════════════════`);
+  return data;
+}
+
+// ============================================================
 // 命令行入口
 // ============================================================
 
@@ -215,6 +281,10 @@ const commands = {
   'mini-login': () => miniLogin(arg1),
   'send-text': () => sendText(arg1, arg2),
   user: () => user(arg1),
+  clients,
+  'create-client': () => createClient(arg1, arg2),
+  'disable-client': () => disableClient(arg1),
+  'rotate-client': () => rotateClient(arg1),
 };
 
 /** 完整巡检流程 */
@@ -245,25 +315,35 @@ async function main() {
   node examples/client.js <命令> [参数]
 
 命令:
-  health                        健康检查
-  accounts                      列出所有账号
-  add-account                   新增/更新账号(读环境变量)
-  check-token                   验证 AppSecret 并查看 token 状态
-  warmup                        批量预热所有账号 token
-  mini-login <code>             小程序 code 换 openid
-  send-text <openid> <内容>      发送客服消息
-  user <openid>                 获取用户信息
-  all                           完整巡检流程
+  health                        健康检查(无需密钥)
+  accounts                      列出所有账号              [需 API_KEY]
+  add-account                   新增/更新账号             [需 API_KEY]
+  check-token                   验证 AppSecret 并查看 token 状态 [需 API_KEY]
+  warmup                        批量预热所有账号 token    [需 API_KEY]
+  mini-login <code>             小程序 code 换 openid     [需 API_KEY]
+  send-text <openid> <内容>      发送客服消息              [需 API_KEY]
+  user <openid>                 获取用户信息              [需 API_KEY]
+  clients                       列出密钥(项目)列表        [需 ADMIN_KEY]
+  create-client <名> <appids>    为项目签发密钥,明文仅显示一次 [需 ADMIN_KEY]
+  disable-client <名>           吊销某项目密钥            [需 ADMIN_KEY]
+  rotate-client <名>            轮换某项目密钥(应急)      [需 ADMIN_KEY]
+  all                           完整巡检流程              [需 API_KEY]
 
 环境变量:
   BASE_URL     服务地址(默认 http://127.0.0.1:3000)
   APPID        账号 appid
+  API_KEY      业务密钥(X-API-Key),访问业务接口用
+  ADMIN_KEY    管理员密钥(X-Admin-Key),管理密钥用
   APP_SECRET   录入账号时用
   WX_TOKEN     录入账号时用(回调 Token)
   AES_KEY      录入账号时用(EncodingAESKey)
 
 示例:
-  BASE_URL=https://wechat.yourdomain.com APPID=wx123 node examples/client.js all
+  # 管理员:为项目A签发密钥(明文只显示一次)
+  ADMIN_KEY=xxx node examples/client.js create-client 项目A wxAAA1,wxAAA2
+
+  # 项目A:用密钥调用业务接口
+  API_KEY=wsk_xxx APPID=wxAAA1 node examples/client.js check-token
 `);
     return;
   }

@@ -10,8 +10,29 @@ import * as tokenService from '../services/token.service.js';
 import * as wechatService from '../services/wechat.service.js';
 import { config } from '../config/index.js';
 import { logger } from '../utils/logger.js';
+import { apiAuth } from '../middleware/auth.js';
 
 export const apiRouter = new Router({ prefix: '/api' });
+
+// ============================================================
+// 健康检查(公开,无需鉴权 —— 供监控探活)
+// ============================================================
+
+apiRouter.get('/health', async (ctx) => {
+  ctx.body = {
+    status: 'ok',
+    env: config.env,
+    time: new Date().toISOString(),
+    uptime: Math.floor(process.uptime()),
+  };
+});
+
+// ============================================================
+// ★ 鉴权边界:以下所有接口都需要 API 密钥 ★
+// 注意:@koa/router 的 use 只作用于其后注册的路由,
+// 所以必须写在 health 之后、业务路由之前。
+// ============================================================
+apiRouter.use(apiAuth());
 
 /** 解析 JSON 请求体的简易中间件(只处理 application/json) */
 async function parseJsonBody(ctx) {
@@ -28,15 +49,7 @@ async function parseJsonBody(ctx) {
 // ============================================================
 // 健康检查
 // ============================================================
-
-apiRouter.get('/health', async (ctx) => {
-  ctx.body = {
-    status: 'ok',
-    env: config.env,
-    time: new Date().toISOString(),
-    uptime: Math.floor(process.uptime()),
-  };
-});
+// （已移到上方鉴权边界之前,此处无重复路由）
 
 // ============================================================
 // 账号管理

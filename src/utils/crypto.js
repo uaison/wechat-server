@@ -102,3 +102,15 @@ export function decrypt(encrypted) {
 export function isEncrypted(value) {
   return typeof value === 'string' && value.startsWith(`${VERSION}:`);
 }
+
+/**
+ * 计算字符串的 SHA-256 十六进制摘要
+ *
+ * 用途:API 密钥只存哈希不存明文 —— 库被拖走也无法还原密钥,
+ * 校验时对请求带来的明文重算哈希比对即可。
+ * @param {string} text
+ * @returns {string} 64 位十六进制
+ */
+export function sha256(text) {
+  return crypto.createHash('sha256').update(String(text), 'utf8').digest('hex');
+}
