@@ -8,7 +8,7 @@
  * 用法: node scripts/integration-test.js
  */
 process.env.ENCRYPT_KEY =
-  process.env.ENCRYPT_KEY || 'c182ee397133b9ff0f5b48fbcaedd8df038146e84ad260b72dca1933839fb497';
+  process.env.ENCRYPT_KEY || '0000000000000000000000000000000000000000000000000000000000000001';
 
 import http from 'node:http';
 import Koa from 'koa';

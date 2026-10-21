@@ -138,7 +138,7 @@ npm run keygen
 输出示例：
 
 ```
-ENCRYPT_KEY=c182ee397133b9ff0f5b48fbcaedd8df038146e84ad260b72dca1933839fb497
+ENCRYPT_KEY=<把 npm run keygen 输出的值填在这里,64 位十六进制>
 ```
 
 > ⚠️ **这个密钥是数据安全的命门**：
@@ -172,10 +172,10 @@ DB_POOL_MIN=2
 DB_POOL_MAX=10
 
 # ===== 加密密钥（第3.1步生成的）=====
-ENCRYPT_KEY=c182ee397133b9ff0f5b48fbcaedd8df038146e84ad260b72dca1933839fb497
+ENCRYPT_KEY=<把 npm run keygen 输出的值填在这里,64 位十六进制>
 
 # ===== 管理员密钥（保护密钥管理接口,只给运维,不给项目方）=====
-ADMIN_KEY=再生成一个,与ENCRYPT_KEY不同
+ADMIN_KEY=<再生成一个,必须与 ENCRYPT_KEY 不同>
 
 # ===== 微信接口 =====
 WECHAT_REQUEST_TIMEOUT=10000

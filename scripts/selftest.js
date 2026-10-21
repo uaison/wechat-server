@@ -4,7 +4,7 @@
  *
  * 不依赖数据库,纯逻辑验证。
  */
-process.env.ENCRYPT_KEY = process.env.ENCRYPT_KEY || 'c182ee397133b9ff0f5b48fbcaedd8df038146e84ad260b72dca1933839fb497';
+process.env.ENCRYPT_KEY = process.env.ENCRYPT_KEY || '0000000000000000000000000000000000000000000000000000000000000001';
 
 const { encrypt, decrypt, isEncrypted } = await import('../src/utils/crypto.js');
 const { makeSignature, checkSignature, encryptMessage, decryptMessage } =

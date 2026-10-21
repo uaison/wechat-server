@@ -8,7 +8,7 @@
  */
 // ⚠️ 必须在动态 import 之前设置 —— ESM 静态 import 会被提升,
 // 而下面的动态 import() 在赋值之后才执行,config 才能读到这些值。
-process.env.ENCRYPT_KEY = process.env.ENCRYPT_KEY || 'c182ee397133b9ff0f5b48fbcaedd8df038146e84ad260b72dca1933839fb497';
+process.env.ENCRYPT_KEY = process.env.ENCRYPT_KEY || '0000000000000000000000000000000000000000000000000000000000000001';
 process.env.ADMIN_KEY = process.env.ADMIN_KEY || 'admin_test_key_12345';
 process.env.DB_CLIENT = 'sqlite';
 process.env.DB_FILE = ':memory:';
@@ -74,6 +74,10 @@ testRouter.get('/api/token/:appid/status', (ctx) => {
 });
 testRouter.post('/api/mini/session', (ctx) => {
   ctx.body = { code: 0, data: { appid: JSON.parse(ctx.request.rawBody).appid } };
+});
+// 批量预热:路径里没有 appid,不应被 appid 授权校验误拦
+testRouter.post('/api/token/warmup', (ctx) => {
+  ctx.body = { code: 0, data: { ok: ['wxAAA1'], failed: [] } };
 });
 
 app.use(testRouter.routes()).use(testRouter.allowedMethods());
@@ -155,6 +159,15 @@ console.log('\n[3] appid 授权隔离(真实路由参数)');
     body: JSON.stringify({ appid: 'wxBBB1', code: 'x' }),
   });
   assert('请求体 appid 越权 → 403', denyBody.status === 403);
+
+  // ★ 回归防护:/api/token/warmup 里的 "warmup" 是动作名而非 appid,
+  //   密钥只授权了具体 appid(无 * 通配)时也必须放行,
+  //   否则"遍历自己所有账号预热"这一合法操作会被误拦。
+  const warmup = await req('/api/token/warmup', {
+    method: 'POST',
+    ...authed(globalThis.keyA),
+  });
+  assert('warmup 不被误判为 appid(无通配密钥也能调) → 200', warmup.status === 200);
 }
 
 console.log('\n[4] 管理接口(ADMIN_KEY 保护)');

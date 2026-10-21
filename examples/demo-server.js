@@ -7,8 +7,9 @@
  * 用法: node examples/demo-server.js
  * 然后另开终端: BASE_URL=http://127.0.0.1:3001 node examples/client.js all
  */
+// 演示用的假密钥,仅本地跑通流程用;生产必须用 `npm run keygen` 生成
 process.env.ENCRYPT_KEY =
-  process.env.ENCRYPT_KEY || 'c182ee397133b9ff0f5b48fbcaedd8df038146e84ad260b72dca1933839fb497';
+  process.env.ENCRYPT_KEY || '0000000000000000000000000000000000000000000000000000000000000001';
 
 import http from 'node:http';
 import Koa from 'koa';

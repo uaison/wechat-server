@@ -96,13 +96,20 @@ export function apiAuth() {
  *   /api/token/:appid/status | /refresh
  *   /api/user/:appid/:openid
  *   /api/accounts/:appid/disable
- * 以及所有 POST/PUT JSON 请求体里的 appid 字段。
+ * 以及所有 POST/PUT/PATCH JSON 请求体里的 appid 字段。
+ *
+ * ⚠️ 必须排除的不是 appid 的路径段:
+ *   /api/token/warmup —— 这里的 "warmup" 是动作名而非 appid,
+ *   若误提取会导致只授权了具体 appid 的密钥调预热被 403 拒绝。
  */
 const APPID_PATH_PATTERNS = [
   /^\/api\/token\/([^/\s]+)/,
   /^\/api\/user\/([^/\s]+)/,
   /^\/api\/accounts\/([^/\s]+)/,
 ];
+
+/** 路径中形如 appid 但实际是动作名的段,不能当作 appid 校验 */
+const NON_APPID_SEGMENTS = new Set(['warmup']);
 
 function collectTargetAppids(ctx) {
   const targets = [];
@@ -113,12 +120,15 @@ function collectTargetAppids(ctx) {
   // ② 直接从路径提取(覆盖 use() 中间件阶段 params 为空的情况)
   for (const pattern of APPID_PATH_PATTERNS) {
     const match = ctx.path.match(pattern);
-    if (match) targets.push(decodeURIComponent(match[1]));
+    if (match) {
+      const segment = decodeURIComponent(match[1]);
+      if (!NON_APPID_SEGMENTS.has(segment)) targets.push(segment);
+    }
   }
 
   // ③ 请求体里的 appid(raw-body 中间件已把原文存到 ctx.request.rawBody)
   const raw = ctx.request.rawBody;
-  if (raw && (ctx.method === 'POST' || ctx.method === 'PUT')) {
+  if (raw && (ctx.method === 'POST' || ctx.method === 'PUT' || ctx.method === 'PATCH')) {
     try {
       const body = JSON.parse(raw);
       if (body && typeof body.appid === 'string') targets.push(body.appid);
