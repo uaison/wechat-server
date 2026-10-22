@@ -26,6 +26,19 @@ function parseBody(ctx) {
   }
 }
 
+/**
+ * 兼容 snake_case 与 camelCase 两种字段名
+ *
+ * 坑:微信生态全是下划线(appid / app_secret / aes_key),调用方按直觉写成
+ * allowed_appids 很自然;但本接口对外字段是 allowedAppids。两边都收,省得踩。
+ */
+function pickAppids(body) {
+  if (body.allowedAppids !== undefined) return body.allowedAppids;
+  if (body.allowed_appids !== undefined) return body.allowed_appids;
+  return undefined;
+}
+
+
 clientsRouter.use(adminAuth());
 
 /**
@@ -53,7 +66,7 @@ clientsRouter.post('/', async (ctx) => {
   try {
     const { client, key } = await clientModel.create({
       name: body.name,
-      allowedAppids: body.allowedAppids || [],
+      allowedAppids: pickAppids(body) || [],
       remark: body.remark || null,
     });
     logger.info({ client: client.name, appids: client.allowedAppids }, '已签发 API 密钥');
@@ -79,8 +92,25 @@ clientsRouter.patch('/:name', async (ctx) => {
   const { name } = ctx.params;
   const body = parseBody(ctx);
 
+  const allowedAppids = pickAppids(body);
+
+  // 一个字段都没给 → 报错,而不是静默返回 200 让人误以为改成功
+  if (allowedAppids === undefined && body.remark === undefined) {
+    ctx.status = 400;
+    ctx.body = {
+      code: 400,
+      message: '没有可更新的字段。请传 allowedAppids(或 allowed_appids)与 remark 中的至少一个',
+    };
+    return;
+  }
+  if (allowedAppids !== undefined && !Array.isArray(allowedAppids)) {
+    ctx.status = 400;
+    ctx.body = { code: 400, message: 'allowedAppids 必须是数组,例如 ["*"] 或 ["wx123"]' };
+    return;
+  }
+
   const client = await clientModel.update(name, {
-    allowedAppids: body.allowedAppids,
+    allowedAppids,
     remark: body.remark,
   });
   if (!client) {
@@ -88,6 +118,7 @@ clientsRouter.patch('/:name', async (ctx) => {
     ctx.body = { code: 404, message: `项目 ${name} 不存在` };
     return;
   }
+  logger.info({ client: name, appids: client.allowedAppids }, 'API 密钥授权已更新');
   ctx.body = { code: 0, data: client };
 });
 

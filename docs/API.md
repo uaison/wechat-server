@@ -154,6 +154,9 @@ curl -X PATCH $BASE/api/clients/项目A \
   -d '{ "allowedAppids": ["wxAAA1", "wxAAA3"] }'
 ```
 
+> 💡 字段名同时接受 `allowedAppids` 与 `allowed_appids`（微信生态习惯下划线）。
+> 若两个字段都没传，返回 **400** 并提示，不会静默成功。
+
 ### POST /api/clients/:name/disable —— 吊销(立即生效)
 
 ```bash

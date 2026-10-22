@@ -246,6 +246,39 @@ console.log('\n[7] 通配授权与管理员密钥隔离');
   const anyAppid = await req('/api/token/wxAny000/status', authed(globalThis.keyB));
   assert('通配后可访问任意 appid', anyAppid.status === 200);
 
+  // 下划线写法也要能生效(调用方按微信习惯常写 allowed_appids)
+  const snake = await req('/api/clients/项目B', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Key': 'admin_test_key_12345' },
+    body: JSON.stringify({ allowed_appids: ['wxOnly1'] }),
+  });
+  assert(
+    'PATCH 支持 allowed_appids 下划线写法',
+    snake.status === 200 && JSON.stringify(snake.body.data.allowedAppids) === '["wxOnly1"]'
+  );
+
+  // 字段名写错时不能静默 200
+  const noop = await req('/api/clients/项目B', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Key': 'admin_test_key_12345' },
+    body: JSON.stringify({ allowedAppid: ['wxTypo'] }),
+  });
+  assert('无可更新字段时返回 400(而非静默 200)', noop.status === 400);
+
+  const notArray = await req('/api/clients/项目B', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Key': 'admin_test_key_12345' },
+    body: JSON.stringify({ allowedAppids: '*' }),
+  });
+  assert('allowedAppids 非数组时返回 400', notArray.status === 400);
+
+  // 复原为通配,供后续断言
+  await req('/api/clients/项目B', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Key': 'admin_test_key_12345' },
+    body: JSON.stringify({ allowedAppids: ['*'] }),
+  });
+
   // 管理员密钥不是业务密钥:不能调业务接口
   const adminAsBiz = await req('/api/accounts', { headers: { 'X-API-Key': 'admin_test_key_12345' } });
   assert('ADMIN_KEY 不能当业务密钥用 → 401', adminAsBiz.status === 401);
