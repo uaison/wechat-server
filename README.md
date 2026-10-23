@@ -90,9 +90,15 @@ examples/
 
 ### 1. 安装依赖
 
+本项目使用 **pnpm**（仓库只跟踪 `pnpm-lock.yaml`，不含 `package-lock.json`）：
+
 ```bash
-npm install
+npm i -g pnpm    # 仅需一次
+pnpm install
 ```
+
+> ⚠️ 请勿使用 `npm install`：它会重新生成 `package-lock.json`，与 `pnpm-lock.yaml` 形成两个真相源。
+> 下文的 `npm run xxx` 在 pnpm 环境下同样可用，也可写成 `pnpm xxx`。
 
 ### 2. 生成加密密钥
 

@@ -67,8 +67,12 @@ node -v   # 应输出 v22.x.x
 mkdir -p /www && cd /www
 git clone https://github.com/uaison/wechat-server.git
 cd wechat-server
-npm install --production
+npm i -g pnpm          # 仅需一次
+pnpm install --prod
 ```
+
+> ⚠️ 本项目使用 **pnpm**，仓库只跟踪 `pnpm-lock.yaml`。
+> 不要用 `npm install`，否则会生成 `package-lock.json`，两套锁文件会互相打架。
 
 > 若服务器拉取 GitHub 缓慢，可在本地打包上传：
 > ```bash
@@ -675,7 +679,7 @@ chmod 600 /backup/env_*.bak
 ```bash
 cd /www/wechat-server
 git pull
-npm install --production
+pnpm install --prod
 npm run migrate      # 若有新的迁移脚本
 pm2 restart wechat-server
 ```
@@ -785,7 +789,7 @@ mysql -u wechat -p -D wechat_server -e "DELETE FROM access_tokens WHERE appid='w
 ```
 □ 服务器安全组放行 22 / 80 / 443
 □ 安装 Node.js 22
-□ 部署代码并 npm install
+□ 部署代码并 pnpm install --prod
 □ 安装 MySQL，建库 wechat_server（utf8mb4）
 □ 创建专用数据库账号 wechat
 □ npm run keygen 生成密钥，并备份到密码管理器
